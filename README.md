@@ -106,6 +106,27 @@ To remove a modified file anyway:
 npx @automann/swarm-discussion-installer uninstall --global --backup --force
 ```
 
+## Clean Uninstall
+
+```sh
+npx @automann/swarm-discussion-installer uninstall --global --all
+```
+
+or:
+
+```sh
+npx @automann/swarm-discussion-installer uninstall --project --all
+```
+
+`--all` is intentionally destructive and does not create backups. It removes:
+
+- the selected custom-agent registration file.
+- the `swarm-discussion@swarm-discussion` Codex plugin.
+- the `swarm-discussion` Codex marketplace.
+
+Use `--global --all` to remove `~/.codex/agents/swarm-expert.toml`. Use `--project --all` from a project root to
+remove `./.codex/agents/swarm-expert.toml`.
+
 ## Overwrite Policy
 
 The installer is idempotent and refuses to silently overwrite a different existing agent file.

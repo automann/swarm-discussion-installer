@@ -12,6 +12,7 @@ import {
   parsePluginList,
   pluginAgentPath,
   registerAgent,
+  removeCodexPluginAndMarketplace,
   targetAgentPath,
   uninstallAgent,
   validateAgentSource
@@ -141,6 +142,18 @@ test("uninstallAgent can force remove a different target and keep a backup", () 
   assert.equal(existsSync(result.backupFile), true);
 });
 
+test("uninstallAgent can force remove a different target without a source template", () => {
+  const root = tempDir();
+  const target = targetAgentPath({ scope: "global", codexHome: root });
+  mkdirSync(path.dirname(target), { recursive: true });
+  writeFileSync(target, 'name = "swarm-expert"\ndescription = "custom"\ndeveloper_instructions = """custom"""\n');
+
+  const result = uninstallAgent({ scope: "global", codexHome: root, force: true });
+  assert.equal(result.action, "force-removed");
+  assert.equal(existsSync(target), false);
+  assert.equal(result.backupFile, null);
+});
+
 test("inspectAgentFile reports hash equality and expected name", () => {
   const root = tempDir();
   const target = targetAgentPath({ scope: "project", projectRoot: root });
@@ -183,6 +196,28 @@ test("parseArgs rejects multiple install scopes", () => {
   );
 });
 
+test("parseArgs accepts clean uninstall", () => {
+  const parsed = parseArgs(["uninstall", "--project", "--all"]);
+  assert.equal(parsed.command, "uninstall");
+  assert.equal(parsed.scope, "project");
+  assert.equal(parsed.all, true);
+  assert.equal(parsed.backup, false);
+});
+
+test("parseArgs rejects clean uninstall with backup", () => {
+  assert.throws(
+    () => parseArgs(["uninstall", "--project", "--all", "--backup"]),
+    /uninstall --all does not support --backup/
+  );
+});
+
+test("parseArgs rejects --all outside uninstall", () => {
+  assert.throws(
+    () => parseArgs(["install", "--global", "--all"]),
+    /--all is only supported by uninstall/
+  );
+});
+
 test("parseArgs rejects verify-spawn for uninstall", () => {
   assert.throws(
     () => parseArgs(["uninstall", "--global", "--verify-spawn"]),
@@ -194,4 +229,65 @@ test("backupPathFor uses timestamped suffix", () => {
   const file = "/tmp/swarm-expert.toml";
   const backup = backupPathFor(file, new Date("2026-06-08T09:30:00.000Z"));
   assert.equal(backup, "/tmp/swarm-expert.toml.bak.20260608T093000Z");
+});
+
+test("removeCodexPluginAndMarketplace removes plugin before marketplace", () => {
+  const calls = [];
+  const results = removeCodexPluginAndMarketplace({
+    codexBin: "codex",
+    cwd: "/tmp/swarm-clean",
+    runner(command, args, options) {
+      calls.push({ command, args, options });
+      return {
+        command,
+        args,
+        status: 0,
+        signal: null,
+        stdout: "",
+        stderr: "",
+        error: null,
+        ok: true
+      };
+    }
+  });
+
+  assert.deepEqual(calls.map((call) => call.args), [
+    ["plugin", "remove", "swarm-discussion@swarm-discussion"],
+    ["plugin", "marketplace", "remove", "swarm-discussion"]
+  ]);
+  assert.equal(calls.every((call) => call.command === "codex"), true);
+  assert.equal(calls.every((call) => call.options.cwd === "/tmp/swarm-clean"), true);
+  assert.equal(results.every((step) => step.result.ok), true);
+});
+
+test("removeCodexPluginAndMarketplace treats an absent marketplace as idempotent", () => {
+  const results = removeCodexPluginAndMarketplace({
+    runner(command, args) {
+      if (args.join(" ") === "plugin marketplace remove swarm-discussion") {
+        return {
+          command,
+          args,
+          status: 1,
+          signal: null,
+          stdout: "",
+          stderr: "Error: marketplace `swarm-discussion` is not configured or installed",
+          error: null,
+          ok: false
+        };
+      }
+      return {
+        command,
+        args,
+        status: 0,
+        signal: null,
+        stdout: "",
+        stderr: "",
+        error: null,
+        ok: true
+      };
+    }
+  });
+
+  assert.equal(results[0].idempotent, false);
+  assert.equal(results[1].idempotent, true);
 });
