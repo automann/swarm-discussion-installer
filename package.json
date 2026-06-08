@@ -4,7 +4,7 @@
   "description": "Installer and doctor for the swarm-discussion Codex plugin and swarm-expert custom agent.",
   "type": "module",
   "bin": {
-    "swarm-discussion-installer": "./bin/swarm-discussion-installer.mjs"
+    "swarm-discussion-installer": "bin/swarm-discussion-installer.mjs"
   },
   "files": [
     "bin/",
