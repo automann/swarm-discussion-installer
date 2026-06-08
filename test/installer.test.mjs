@@ -10,18 +10,33 @@ import {
   inspectAgentFile,
   parseArgs,
   parsePluginList,
+  pluginAgentPath,
   registerAgent,
-  sourceAgentPath,
   targetAgentPath,
-  validateAgentTemplate
+  validateAgentSource
 } from "../lib/installer.mjs";
 
 function tempDir() {
   return mkdtempSync(path.join(os.tmpdir(), "swarm-installer-test-"));
 }
 
-test("bundled swarm-expert template is valid", () => {
-  const result = validateAgentTemplate();
+const TEST_AGENT_TOML = `name = "swarm-expert"
+description = "Embodies a swarm-discussion persona/role supplied at spawn time; returns only the requested JSON."
+developer_instructions = """
+You are ONE participant in a structured swarm-discussion.
+"""
+`;
+
+function writePluginAgent(root = tempDir(), text = TEST_AGENT_TOML) {
+  const file = pluginAgentPath(root);
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, text);
+  return file;
+}
+
+test("plugin swarm-expert template is valid", () => {
+  const source = writePluginAgent();
+  const result = validateAgentSource(source);
   assert.equal(result.ok, true, result.errors.join("; "));
   assert.equal(result.fields.name, AGENT_NAME);
   assert.ok(result.fields.description);
@@ -30,18 +45,20 @@ test("bundled swarm-expert template is valid", () => {
 
 test("registerAgent creates a global target under CODEX_HOME", () => {
   const root = tempDir();
-  const result = registerAgent({ scope: "global", codexHome: root });
+  const source = writePluginAgent();
+  const result = registerAgent({ scope: "global", codexHome: root, sourceFile: source });
   const target = targetAgentPath({ scope: "global", codexHome: root });
 
   assert.equal(result.action, "created");
   assert.equal(result.target, target);
-  assert.equal(readFileSync(target, "utf8"), readFileSync(sourceAgentPath(), "utf8"));
+  assert.equal(readFileSync(target, "utf8"), readFileSync(source, "utf8"));
 });
 
 test("registerAgent is idempotent when target matches", () => {
   const root = tempDir();
-  registerAgent({ scope: "global", codexHome: root });
-  const second = registerAgent({ scope: "global", codexHome: root });
+  const source = writePluginAgent();
+  registerAgent({ scope: "global", codexHome: root, sourceFile: source });
+  const second = registerAgent({ scope: "global", codexHome: root, sourceFile: source });
 
   assert.equal(second.action, "already-installed");
 });
@@ -55,7 +72,7 @@ test("registerAgent refuses to overwrite a different target by default", () => {
   });
 
   assert.throws(
-    () => registerAgent({ scope: "global", codexHome: root }),
+    () => registerAgent({ scope: "global", codexHome: root, sourceFile: writePluginAgent() }),
     /Refusing to overwrite existing custom agent file/
   );
 });
@@ -68,22 +85,31 @@ test("registerAgent backs up a different target before overwriting", () => {
     flag: "wx"
   });
 
-  const result = registerAgent({ scope: "global", codexHome: root, backup: true });
+  const source = writePluginAgent();
+  const result = registerAgent({ scope: "global", codexHome: root, sourceFile: source, backup: true });
   assert.equal(result.action, "backed-up-and-overwritten");
   assert.ok(result.backupFile);
   assert.equal(existsSync(result.backupFile), true);
-  assert.equal(readFileSync(target, "utf8"), readFileSync(sourceAgentPath(), "utf8"));
+  assert.equal(readFileSync(target, "utf8"), readFileSync(source, "utf8"));
 });
 
 test("inspectAgentFile reports hash equality and expected name", () => {
   const root = tempDir();
   const target = targetAgentPath({ scope: "project", projectRoot: root });
-  registerAgent({ scope: "project", projectRoot: root });
+  const source = writePluginAgent();
+  registerAgent({ scope: "project", projectRoot: root, sourceFile: source });
 
-  const inspected = inspectAgentFile(target);
+  const inspected = inspectAgentFile(target, source);
   assert.equal(inspected.exists, true);
   assert.equal(inspected.sameAsSource, true);
   assert.equal(inspected.declaresExpectedName, true);
+});
+
+test("pluginAgentPath points at the installed plugin agent template", () => {
+  assert.equal(
+    pluginAgentPath("/Users/example/.codex/.tmp/marketplaces/swarm-discussion/plugins/codex"),
+    "/Users/example/.codex/.tmp/marketplaces/swarm-discussion/plugins/codex/agents/swarm-expert.toml"
+  );
 });
 
 test("parsePluginList finds installed plugin rows", () => {
