@@ -63,6 +63,49 @@ npx @automann/swarm-discussion-installer doctor --verify-spawn
 
 This may consume a Codex model call, so it is opt-in.
 
+## Repair
+
+```sh
+npx @automann/swarm-discussion-installer repair --global
+```
+
+or:
+
+```sh
+npx @automann/swarm-discussion-installer repair --project
+```
+
+`repair` reruns the native Codex plugin install/update commands, reads the current
+`agents/swarm-expert.toml` from the installed plugin, and rewrites the selected custom-agent target when it is
+missing or stale. It uses the same overwrite policy as `install`.
+
+## Uninstall Custom-Agent Registration
+
+```sh
+npx @automann/swarm-discussion-installer uninstall --global
+```
+
+or:
+
+```sh
+npx @automann/swarm-discussion-installer uninstall --project
+```
+
+`uninstall` only removes the `swarm-expert.toml` custom-agent registration file. It does not remove the Codex
+plugin or marketplace.
+
+The command is conservative:
+
+- target missing: succeeds as already absent.
+- target matches the installed plugin template: removes it.
+- target differs from the installed plugin template: refuses to remove it.
+
+To remove a modified file anyway:
+
+```sh
+npx @automann/swarm-discussion-installer uninstall --global --backup --force
+```
+
 ## Overwrite Policy
 
 The installer is idempotent and refuses to silently overwrite a different existing agent file.

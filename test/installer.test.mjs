@@ -13,6 +13,7 @@ import {
   pluginAgentPath,
   registerAgent,
   targetAgentPath,
+  uninstallAgent,
   validateAgentSource
 } from "../lib/installer.mjs";
 
@@ -93,6 +94,53 @@ test("registerAgent backs up a different target before overwriting", () => {
   assert.equal(readFileSync(target, "utf8"), readFileSync(source, "utf8"));
 });
 
+test("uninstallAgent removes a target that matches the plugin template", () => {
+  const root = tempDir();
+  const source = writePluginAgent();
+  registerAgent({ scope: "global", codexHome: root, sourceFile: source });
+  const target = targetAgentPath({ scope: "global", codexHome: root });
+
+  const result = uninstallAgent({ scope: "global", codexHome: root, sourceFile: source });
+  assert.equal(result.action, "removed");
+  assert.equal(result.target, target);
+  assert.equal(existsSync(target), false);
+});
+
+test("uninstallAgent is idempotent when target is absent", () => {
+  const root = tempDir();
+  const result = uninstallAgent({ scope: "global", codexHome: root, sourceFile: writePluginAgent() });
+
+  assert.equal(result.action, "already-absent");
+});
+
+test("uninstallAgent refuses to remove a different target by default", () => {
+  const root = tempDir();
+  const source = writePluginAgent();
+  const target = targetAgentPath({ scope: "global", codexHome: root });
+  mkdirSync(path.dirname(target), { recursive: true });
+  writeFileSync(target, 'name = "swarm-expert"\ndescription = "custom"\ndeveloper_instructions = """custom"""\n');
+
+  assert.throws(
+    () => uninstallAgent({ scope: "global", codexHome: root, sourceFile: source }),
+    /Refusing to remove custom agent file/
+  );
+  assert.equal(existsSync(target), true);
+});
+
+test("uninstallAgent can force remove a different target and keep a backup", () => {
+  const root = tempDir();
+  const source = writePluginAgent();
+  const target = targetAgentPath({ scope: "global", codexHome: root });
+  mkdirSync(path.dirname(target), { recursive: true });
+  writeFileSync(target, 'name = "swarm-expert"\ndescription = "custom"\ndeveloper_instructions = """custom"""\n');
+
+  const result = uninstallAgent({ scope: "global", codexHome: root, sourceFile: source, force: true, backup: true });
+  assert.equal(result.action, "force-removed");
+  assert.equal(existsSync(target), false);
+  assert.ok(result.backupFile);
+  assert.equal(existsSync(result.backupFile), true);
+});
+
 test("inspectAgentFile reports hash equality and expected name", () => {
   const root = tempDir();
   const target = targetAgentPath({ scope: "project", projectRoot: root });
@@ -132,6 +180,13 @@ test("parseArgs rejects multiple install scopes", () => {
   assert.throws(
     () => parseArgs(["install", "--global", "--project"]),
     /Choose exactly one install scope/
+  );
+});
+
+test("parseArgs rejects verify-spawn for uninstall", () => {
+  assert.throws(
+    () => parseArgs(["uninstall", "--global", "--verify-spawn"]),
+    /uninstall does not support --verify-spawn/
   );
 });
 
