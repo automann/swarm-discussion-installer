@@ -22,7 +22,8 @@ Expected checks:
 
 - `swarm-discussion@swarm-discussion` installed and enabled.
 - `plugin swarm-expert template is valid`.
-- `plugin bundled runtime is valid`.
+- `plugin bundled runtime is valid`, including the bundled minimal fixture
+  smoke.
 - `project custom agent installed`.
 - `effective custom agent`.
 

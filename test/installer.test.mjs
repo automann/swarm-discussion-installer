@@ -206,12 +206,14 @@ test("parseRuntimeDoctorOutput accepts a compatible bundled runtime", () => {
     ok: true,
     wrapper: { compatibility: RUNTIME_COMPATIBILITY },
     runtime: { source: "bundled" },
+    fixtureSmoke: { ok: true },
     contractSummary: { commandCount: 16 }
   }));
 
   assert.equal(parsed.ok, true);
   assert.equal(parsed.compatible, true);
   assert.equal(parsed.source, "bundled");
+  assert.equal(parsed.fixtureSmokeOk, true);
 });
 
 test("runBundledRuntimeDoctor verifies the plugin runtime wrapper", () => {
@@ -224,7 +226,7 @@ test("runBundledRuntimeDoctor verifies the plugin runtime wrapper", () => {
     pluginRoot,
     runner(command, args, options) {
       assert.equal(command, "python3");
-      assert.deepEqual(args, [wrapper, "doctor"]);
+      assert.deepEqual(args, [wrapper, "doctor", "--smoke-fixture"]);
       assert.equal(options.cwd, pluginRoot);
       assert.equal(Object.hasOwn(options.env, RUNTIME_OVERRIDE_ENV), false);
       return {
@@ -236,6 +238,7 @@ test("runBundledRuntimeDoctor verifies the plugin runtime wrapper", () => {
           ok: true,
           wrapper: { compatibility: RUNTIME_COMPATIBILITY },
           runtime: { source: "bundled" },
+          fixtureSmoke: { ok: true, summary: { health: "on-track" } },
           contractSummary: { commandCount: 16 }
         }),
         stderr: "",
@@ -247,6 +250,7 @@ test("runBundledRuntimeDoctor verifies the plugin runtime wrapper", () => {
 
   assert.equal(checked.ok, true);
   assert.match(checked.detail, /bundled swarm-runtime-v2-alpha/);
+  assert.match(checked.detail, /fixture on-track/);
 });
 
 test("runBundledRuntimeDoctor rejects non-bundled runtime sources", () => {
@@ -267,6 +271,7 @@ test("runBundledRuntimeDoctor rejects non-bundled runtime sources", () => {
           ok: true,
           wrapper: { compatibility: RUNTIME_COMPATIBILITY },
           runtime: { source: "PATH" },
+          fixtureSmoke: { ok: true, summary: { health: "on-track" } },
           contractSummary: { commandCount: 16 }
         }),
         stderr: "",
@@ -278,6 +283,38 @@ test("runBundledRuntimeDoctor rejects non-bundled runtime sources", () => {
 
   assert.equal(checked.ok, false);
   assert.match(checked.detail, /expected bundled runtime source/);
+});
+
+test("runBundledRuntimeDoctor rejects a failed fixture smoke", () => {
+  const pluginRoot = tempDir();
+  const wrapper = pluginRuntimeWrapperPath(pluginRoot);
+  mkdirSync(path.dirname(wrapper), { recursive: true });
+  writeFileSync(wrapper, "# fake wrapper\n");
+
+  const checked = runBundledRuntimeDoctor({
+    pluginRoot,
+    runner(command, args) {
+      return {
+        command,
+        args,
+        status: 0,
+        signal: null,
+        stdout: JSON.stringify({
+          ok: false,
+          wrapper: { compatibility: RUNTIME_COMPATIBILITY },
+          runtime: { source: "bundled" },
+          fixtureSmoke: { ok: false, errors: [{ code: "missing_host_step" }] },
+          contractSummary: { commandCount: 16 }
+        }),
+        stderr: "",
+        error: null,
+        ok: false
+      };
+    }
+  });
+
+  assert.equal(checked.ok, false);
+  assert.match(checked.detail, /runtime doctor reported failure|fixture smoke failed/);
 });
 
 test("runBundledRuntimeDoctor reports a missing wrapper", () => {
