@@ -161,3 +161,8 @@ You can find the installed plugin path with:
 ```sh
 codex plugin list | rg swarm-discussion@swarm-discussion
 ```
+
+## Smoke Tests
+
+See [`SMOKE.md`](SMOKE.md) for the isolated clean-install smoke. The real
+`--verify-spawn` smoke requires an authenticated Codex home and remains opt-in.
