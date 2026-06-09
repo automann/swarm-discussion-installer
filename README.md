@@ -7,6 +7,9 @@ standalone agent directories, not from the plugin package internals. This wrappe
 the native Codex plugin commands, then copies `swarm-expert.toml` from the installed plugin directory into the
 expected custom-agent location.
 
+The plugin also carries its own bundled runtime. The installer verifies that bundled runtime through
+`runtime/swarm_runtime_wrapper.py doctor`; it does not install or manage a global `swarm-rt` command.
+
 ## Install Globally
 
 ```sh
@@ -50,6 +53,7 @@ The doctor command does not modify files. It checks:
 
 - Codex CLI availability and version.
 - `swarm-discussion@swarm-discussion` plugin installed and enabled.
+- bundled plugin runtime contract compatibility.
 - global custom-agent file.
 - project custom-agent file.
 - TOML `name = "swarm-expert"`.

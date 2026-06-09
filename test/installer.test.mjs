@@ -6,13 +6,18 @@ import { test } from "node:test";
 
 import {
   AGENT_NAME,
+  RUNTIME_COMPATIBILITY,
+  RUNTIME_OVERRIDE_ENV,
   backupPathFor,
   inspectAgentFile,
   parseArgs,
   parsePluginList,
+  parseRuntimeDoctorOutput,
   pluginAgentPath,
+  pluginRuntimeWrapperPath,
   registerAgent,
   removeCodexPluginAndMarketplace,
+  runBundledRuntimeDoctor,
   targetAgentPath,
   uninstallAgent,
   validateAgentSource
@@ -173,6 +178,13 @@ test("pluginAgentPath points at the installed plugin agent template", () => {
   );
 });
 
+test("pluginRuntimeWrapperPath points at the installed plugin runtime wrapper", () => {
+  assert.equal(
+    pluginRuntimeWrapperPath("/Users/example/.codex/plugins/cache/swarm-discussion/swarm-discussion/0.1.5"),
+    "/Users/example/.codex/plugins/cache/swarm-discussion/swarm-discussion/0.1.5/runtime/swarm_runtime_wrapper.py"
+  );
+});
+
 test("parsePluginList finds installed plugin rows", () => {
   const output = `
 Marketplace \`swarm-discussion\`
@@ -187,6 +199,92 @@ swarm-discussion@swarm-discussion  installed, enabled  0.1.5    /Users/example/.
   assert.equal(parsed.installed, true);
   assert.equal(parsed.enabled, true);
   assert.equal(parsed.version, "0.1.5");
+});
+
+test("parseRuntimeDoctorOutput accepts a compatible bundled runtime", () => {
+  const parsed = parseRuntimeDoctorOutput(JSON.stringify({
+    ok: true,
+    wrapper: { compatibility: RUNTIME_COMPATIBILITY },
+    runtime: { source: "bundled" },
+    contractSummary: { commandCount: 16 }
+  }));
+
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.compatible, true);
+  assert.equal(parsed.source, "bundled");
+});
+
+test("runBundledRuntimeDoctor verifies the plugin runtime wrapper", () => {
+  const pluginRoot = tempDir();
+  const wrapper = pluginRuntimeWrapperPath(pluginRoot);
+  mkdirSync(path.dirname(wrapper), { recursive: true });
+  writeFileSync(wrapper, "# fake wrapper\n");
+
+  const checked = runBundledRuntimeDoctor({
+    pluginRoot,
+    runner(command, args, options) {
+      assert.equal(command, "python3");
+      assert.deepEqual(args, [wrapper, "doctor"]);
+      assert.equal(options.cwd, pluginRoot);
+      assert.equal(Object.hasOwn(options.env, RUNTIME_OVERRIDE_ENV), false);
+      return {
+        command,
+        args,
+        status: 0,
+        signal: null,
+        stdout: JSON.stringify({
+          ok: true,
+          wrapper: { compatibility: RUNTIME_COMPATIBILITY },
+          runtime: { source: "bundled" },
+          contractSummary: { commandCount: 16 }
+        }),
+        stderr: "",
+        error: null,
+        ok: true
+      };
+    }
+  });
+
+  assert.equal(checked.ok, true);
+  assert.match(checked.detail, /bundled swarm-runtime-v2-alpha/);
+});
+
+test("runBundledRuntimeDoctor rejects non-bundled runtime sources", () => {
+  const pluginRoot = tempDir();
+  const wrapper = pluginRuntimeWrapperPath(pluginRoot);
+  mkdirSync(path.dirname(wrapper), { recursive: true });
+  writeFileSync(wrapper, "# fake wrapper\n");
+
+  const checked = runBundledRuntimeDoctor({
+    pluginRoot,
+    runner(command, args) {
+      return {
+        command,
+        args,
+        status: 0,
+        signal: null,
+        stdout: JSON.stringify({
+          ok: true,
+          wrapper: { compatibility: RUNTIME_COMPATIBILITY },
+          runtime: { source: "PATH" },
+          contractSummary: { commandCount: 16 }
+        }),
+        stderr: "",
+        error: null,
+        ok: true
+      };
+    }
+  });
+
+  assert.equal(checked.ok, false);
+  assert.match(checked.detail, /expected bundled runtime source/);
+});
+
+test("runBundledRuntimeDoctor reports a missing wrapper", () => {
+  const checked = runBundledRuntimeDoctor({ pluginRoot: tempDir() });
+
+  assert.equal(checked.ok, false);
+  assert.match(checked.detail, /missing wrapper/);
 });
 
 test("parseArgs rejects multiple install scopes", () => {
