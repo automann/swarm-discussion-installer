@@ -7,9 +7,9 @@ standalone agent directories, not from the plugin package internals. This wrappe
 the native Codex plugin commands, then copies `swarm-expert.toml` from the installed plugin directory into the
 expected custom-agent location.
 
-The plugin also carries its own bundled runtime. The installer verifies that bundled runtime and its minimal
-fixture through `runtime/swarm_runtime_wrapper.py doctor --smoke-fixture`; it does not install or manage a
-global `swarm-rt` command.
+The plugin also carries its own bundled runtime. The installer verifies the runtime from Codex's versioned
+plugin cache at `CODEX_HOME/plugins/cache/swarm-discussion/swarm-discussion/<version>/runtime/swarm_runtime_wrapper.py`
+with `doctor --smoke-fixture`; it does not install or manage a global `swarm-rt` command.
 
 ## Install Globally
 
@@ -54,11 +54,13 @@ The doctor command does not modify files. It checks:
 
 - Codex CLI availability and version.
 - `swarm-discussion@swarm-discussion` plugin installed and enabled.
-- bundled plugin runtime contract compatibility.
+- installed plugin cache root for the active plugin version.
+- stale plugin cache versions left beside the active cache.
+- bundled plugin runtime contract compatibility from the installed wrapper.
 - global custom-agent file.
 - project custom-agent file.
 - TOML `name = "swarm-expert"`.
-- file hash equality with the template from the installed `swarm-discussion` plugin.
+- file hash equality with the template from the installed plugin cache.
 
 Optional real spawn smoke test:
 
@@ -81,8 +83,9 @@ npx @automann/swarm-discussion-installer repair --project
 ```
 
 `repair` reruns the native Codex plugin install/update commands, reads the current
-`agents/swarm-expert.toml` from the installed plugin, and rewrites the selected custom-agent target when it is
-missing or stale. It uses the same overwrite policy as `install`.
+`agents/swarm-expert.toml` from the installed plugin cache, and rewrites the selected custom-agent target when
+it is missing or stale. It uses the same overwrite policy as `install`, then runs `doctor` so stale cache
+versions and wrapper smoke failures are visible before the command exits.
 
 ## Uninstall Custom-Agent Registration
 
@@ -154,10 +157,11 @@ Manual copy is a troubleshooting path, not the normal install path:
 
 ```sh
 mkdir -p ~/.codex/agents
-cp /path/to/installed/swarm-discussion/plugins/codex/agents/swarm-expert.toml ~/.codex/agents/swarm-expert.toml
+cp ~/.codex/plugins/cache/swarm-discussion/swarm-discussion/<version>/agents/swarm-expert.toml \
+  ~/.codex/agents/swarm-expert.toml
 ```
 
-You can find the installed plugin path with:
+You can find the active version with:
 
 ```sh
 codex plugin list | rg swarm-discussion@swarm-discussion

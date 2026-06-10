@@ -21,6 +21,7 @@ CODEX_HOME="$SMOKE_ROOT/codex-home" \
 Expected checks:
 
 - `swarm-discussion@swarm-discussion` installed and enabled.
+- `installed plugin cache root`.
 - `plugin swarm-expert template is valid`.
 - `plugin bundled runtime is valid`, including the bundled minimal fixture
   smoke.
@@ -42,6 +43,11 @@ Expected result:
 - Codex marketplace removed.
 - `codex plugin list` reports no marketplace plugins for the isolated
   `CODEX_HOME`.
+
+`doctor` may warn when older cache directories remain next to the active
+version under `CODEX_HOME/plugins/cache/swarm-discussion/swarm-discussion`.
+The active version's cache root must still exist and the wrapper smoke must run
+from that cache root.
 
 ## Real Spawn Smoke
 

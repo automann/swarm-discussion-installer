@@ -10,13 +10,16 @@ import {
   RUNTIME_OVERRIDE_ENV,
   backupPathFor,
   inspectAgentFile,
+  listPluginCacheVersions,
   parseArgs,
   parsePluginList,
   parseRuntimeDoctorOutput,
   pluginAgentPath,
+  pluginCacheRoot,
   pluginRuntimeWrapperPath,
   registerAgent,
   removeCodexPluginAndMarketplace,
+  resolveInstalledPluginRoot,
   runBundledRuntimeDoctor,
   targetAgentPath,
   uninstallAgent,
@@ -185,6 +188,59 @@ test("pluginRuntimeWrapperPath points at the installed plugin runtime wrapper", 
   );
 });
 
+test("pluginCacheRoot points at the Codex versioned plugin cache", () => {
+  assert.equal(
+    pluginCacheRoot({ codexHome: "/Users/example/.codex", version: "0.1.5" }),
+    "/Users/example/.codex/plugins/cache/swarm-discussion/swarm-discussion/0.1.5"
+  );
+});
+
+test("resolveInstalledPluginRoot prefers the exact versioned cache root", () => {
+  const codexHome = tempDir();
+  const root = pluginCacheRoot({ codexHome, version: "0.1.5" });
+  mkdirSync(root, { recursive: true });
+
+  const resolved = resolveInstalledPluginRoot({
+    codexHome,
+    pluginStatus: {
+      version: "0.1.5",
+      path: "/Users/example/.codex/.tmp/marketplaces/swarm-discussion/plugins/codex"
+    }
+  });
+
+  assert.equal(resolved.pluginRoot, root);
+  assert.equal(resolved.rootKind, "cache");
+  assert.equal(resolved.exactCacheExists, true);
+});
+
+test("resolveInstalledPluginRoot detects stale cache versions", () => {
+  const codexHome = tempDir();
+  mkdirSync(pluginCacheRoot({ codexHome, version: "0.1.4" }), { recursive: true });
+
+  const resolved = resolveInstalledPluginRoot({
+    codexHome,
+    pluginStatus: {
+      version: "0.1.5",
+      path: "/Users/example/.codex/.tmp/marketplaces/swarm-discussion/plugins/codex"
+    }
+  });
+
+  assert.equal(resolved.rootKind, "marketplace");
+  assert.equal(resolved.exactCacheExists, false);
+  assert.equal(resolved.cacheVersionMismatch, true);
+  assert.deepEqual(resolved.cacheVersions, ["0.1.4"]);
+  assert.deepEqual(resolved.staleCacheVersions, ["0.1.4"]);
+});
+
+test("listPluginCacheVersions sorts semver-like cache directories", () => {
+  const codexHome = tempDir();
+  for (const version of ["0.1.10", "0.1.2", "0.1.9"]) {
+    mkdirSync(pluginCacheRoot({ codexHome, version }), { recursive: true });
+  }
+
+  assert.deepEqual(listPluginCacheVersions(codexHome), ["0.1.2", "0.1.9", "0.1.10"]);
+});
+
 test("parsePluginList finds installed plugin rows", () => {
   const output = `
 Marketplace \`swarm-discussion\`
@@ -199,6 +255,7 @@ swarm-discussion@swarm-discussion  installed, enabled  0.1.5    /Users/example/.
   assert.equal(parsed.installed, true);
   assert.equal(parsed.enabled, true);
   assert.equal(parsed.version, "0.1.5");
+  assert.equal(parsed.path, "/Users/example/.codex/.tmp/marketplaces/swarm-discussion/plugins/codex");
 });
 
 test("parseRuntimeDoctorOutput accepts a compatible bundled runtime", () => {
